@@ -14,6 +14,7 @@ import torch_geometric.transforms as T
 
 import deepchem as dc
 from deepchem.feat.molecule_featurizers import MolGraphConvFeaturizer
+from deepchem.feat.graph_data import BatchGraphData
 
 class MyTransform(object):
     def __call__(self, data):
@@ -100,8 +101,9 @@ def test(loader):
     model.eval()
     error = 0
 
-    for data in loader:
-        data = data.to(device)
+    for X,y,w,ids in loader:
+        data.x = torch.tensor(X)
+        
         error += (model(data) * std - data.y * std).abs().sum().item()  # MAE
     return error / len(loader.dataset)
 
@@ -144,18 +146,41 @@ if __name__ == '__main__':
     num_feat = 30 # max([train_dc.X[i].num_node_features for i in range(len(train_dc))])
     
     # print('num_feRatures : { }\n'.format(dataset.num_features))
-
-    # test_loader = DataLoader(test_dataset, batch_size=batch_size)
-    # val_loader = DataLoader(val_dataset, batch_size=batch_size)
-    # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
-    if use_unsup_loss:
-        unsup_train_dataset = train_dc
-        # unsup_train_loader = DataLoader(unsup_train_dataset, batch_size=batch_size, shuffle=True)
+    batch_size = 20
+    
+    train_dc_py = train_dc.make_pytorch_dataset(batch_size=batch_size)
+    valid_dc_py = valid_dc.make_pytorch_dataset(batch_size=batch_size)
+    test_dc_py = test_dc.make_pytorch_dataset(batch_size=batch_size)
+    
+    # # make a list of lists of size batch_size
+    # count = 0
+    # train_batches = []
+    # # training dataloader
+    # while count < len(train_dc):
+    #     batch_list = [train_dc.X[i] for i in range(count, count+batch_size)]
+    #     train_batches.append(BatchGraphData(batch_list))
+    #     count += batch_size
 
-    #     print(len(train_dataset), len(val_dataset), len(test_dataset), len(unsup_train_dataset))
-    # else:
-    #     print(len(train_dataset), len(val_dataset), len(test_dataset))
+    # # validation dataloader
+    # count = 0
+    # val_batches = []
+    # while count < len(valid_dc):
+    #     batch_list = [valid_dc.X[i] for i in range(count, count+batch_size)]
+    #     val_batches.append(BatchGraphData(batch_list))
+    #     count += batch_size
+        
+    # # test dataloader
+    # count = 0
+    # test_batches = []
+    # while count < len(test_dc):
+    #     batch_list = [test_dc.X[i] for i in range(count, count+batch_size)]
+    #     test_batches.append(BatchGraphData(batch_list))
+    #     count += batch_size
+
+    if use_unsup_loss:
+        unsup_train_dataset = train_dc_py
+
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = Net(num_feat, dim, use_unsup_loss, separate_encoder).to(device)
@@ -163,8 +188,8 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.7, patience=5, min_lr=0.000001)
 
-    val_error = test(valid_dc)
-    test_error = test(test_dc)
+    val_error = test(valid_dc_py)
+    test_error = test(test_dc_py)
     print('Epoch: {:03d}, Validation MAE: {:.7f}, Test MAE: {:.7f},'.format(0, val_error, test_error))
 
     best_val_error = None
