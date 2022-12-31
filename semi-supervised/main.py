@@ -102,9 +102,19 @@ def test(loader):
     error = 0
 
     for X,y,w,ids in loader:
+        # convert from numpy array to torch tensor
+        # for x in X:
+        #     x.edge_features = torch.from_numpy(x.edge_features).float()
+        #     x.edge_index = torch.from_numpy(x.edge_index).long()
+        #     x.node_features = torch.from_numpy(x.node_features).float()
         X = BatchGraphData(X)
+        X.edge_features = torch.from_numpy(X.edge_features).float()
+        X.edge_index = torch.from_numpy(X.edge_index).long()
+        X.node_features = torch.from_numpy(X.node_features).float()
+        X.graph_index = torch.from_numpy(X.graph_index).long()
         # take out target from y
         y = y[:,target]
+        y = torch.from_numpy(y).float()
         error += (model(X) * std - y * std).abs().sum().item()  # MAE
     return error / len(loader.dataset)
 
@@ -144,6 +154,9 @@ if __name__ == '__main__':
     targets, dataset, transforms = dc.molnet.load_zinc15(featurizer=featurizer)
     train_dc, valid_dc, test_dc = dataset
     
+    mean = train_dc.y[:, target].mean().item() # just train dc
+    std = train_dc.y[:, target].std().item()
+    
     num_feat = 30 # max([train_dc.X[i].num_node_features for i in range(len(train_dc))])
     
     # print('num_feRatures : { }\n'.format(dataset.num_features))
@@ -154,36 +167,15 @@ if __name__ == '__main__':
     valid_dc_py = valid_dc.make_pytorch_dataset(batch_size=batch_size)
     test_dc_py = test_dc.make_pytorch_dataset(batch_size=batch_size)
     
-    # # make a list of lists of size batch_size
-    # count = 0
-    # train_batches = []
-    # # training dataloader
-    # while count < len(train_dc):
-    #     batch_list = [train_dc.X[i] for i in range(count, count+batch_size)]
-    #     train_batches.append(BatchGraphData(batch_list))
-    #     count += batch_size
-
-    # # validation dataloader
-    # count = 0
-    # val_batches = []
-    # while count < len(valid_dc):
-    #     batch_list = [valid_dc.X[i] for i in range(count, count+batch_size)]
-    #     val_batches.append(BatchGraphData(batch_list))
-    #     count += batch_size
-        
-    # # test dataloader
-    # count = 0
-    # test_batches = []
-    # while count < len(test_dc):
-    #     batch_list = [test_dc.X[i] for i in range(count, count+batch_size)]
-    #     test_batches.append(BatchGraphData(batch_list))
-    #     count += batch_size
+    #convert every value to a torch tensor
+    
 
     if use_unsup_loss:
         unsup_train_dataset = train_dc_py
 
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
     model = Net(num_feat, dim, use_unsup_loss, separate_encoder).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -197,11 +189,11 @@ if __name__ == '__main__':
     for epoch in range(1, epochs):
         lr = scheduler.optimizer.param_groups[0]['lr']
         loss = train(epoch, use_unsup_loss)
-        val_error = test(val_loader)
+        val_error = test(valid_dc_py)
         scheduler.step(val_error)
 
         if best_val_error is None or val_error <= best_val_error:
-            test_error = test(test_loader)
+            test_error = test(test_dc_py)
             best_val_error = val_error
 
 
