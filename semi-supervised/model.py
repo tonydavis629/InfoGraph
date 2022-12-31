@@ -22,7 +22,7 @@ class Encoder(torch.nn.Module):
         super(Encoder, self).__init__()
         self.lin0 = torch.nn.Linear(num_features, dim)
 
-        nn = Sequential(Linear(5, 128), ReLU(), Linear(128, dim * dim))
+        nn = Sequential(Linear(11, 128), ReLU(), Linear(128, dim * dim)) # 11 edge features
         self.conv = NNConv(dim, dim, nn, aggr='mean', root_weight=False)
         self.gru = GRU(dim, dim)
 

@@ -102,11 +102,6 @@ def test(loader):
     error = 0
 
     for X,y,w,ids in loader:
-        # convert from numpy array to torch tensor
-        # for x in X:
-        #     x.edge_features = torch.from_numpy(x.edge_features).float()
-        #     x.edge_index = torch.from_numpy(x.edge_index).long()
-        #     x.node_features = torch.from_numpy(x.node_features).float()
         X = BatchGraphData(X)
         X.edge_features = torch.from_numpy(X.edge_features).float()
         X.edge_index = torch.from_numpy(X.edge_index).long()
@@ -115,8 +110,9 @@ def test(loader):
         # take out target from y
         y = y[:,target]
         y = torch.from_numpy(y).float()
+        
         error += (model(X) * std - y * std).abs().sum().item()  # MAE
-    return error / len(loader.dataset)
+    return error / len(loader.disk_dataset)
 
 def seed_everything(seed=1234):
     random.seed(seed)
