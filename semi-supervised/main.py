@@ -55,12 +55,14 @@ def train(epoch, use_unsup_loss):
     unsup_sup_loss_all = 0
 
     if use_unsup_loss:
-        for data, data2 in zip(train_loader, unsup_train_loader):
-            data = data.to(device)
-            data2 = data2.to(device)
+        for data, data2 in zip(train_dc_py, unsup_train_dataset):
+            data, y = dc_to_pyg(data)
+            data2, y2 = dc_to_pyg(data2)
+            # data = data.to(device)
+            # data2 = data2.to(device)
             optimizer.zero_grad()
 
-            sup_loss = F.mse_loss(model(data), data.y)
+            sup_loss = F.mse_loss(model(data), y)
             unsup_loss = model.unsup_loss(data2)
             if separate_encoder:
                 unsup_sup_loss = model.unsup_sup_loss(data2)
@@ -74,7 +76,7 @@ def train(epoch, use_unsup_loss):
             unsup_loss_all += unsup_loss.item()
             if separate_encoder:
                 unsup_sup_loss_all += unsup_sup_loss.item()
-            loss_all += loss.item() * data.num_graphs
+            loss_all += loss.item() * batch_size #data.num_graphs
 
             optimizer.step()
 
@@ -82,34 +84,47 @@ def train(epoch, use_unsup_loss):
             print(sup_loss_all, unsup_loss_all, unsup_sup_loss_all)
         else:
             print(sup_loss_all, unsup_loss_all)
-        return loss_all / len(train_loader.dataset)
+        return loss_all / len(train_dc_py.disk_dataset)
     else:
-        for data in train_loader:
-            data = data.to(device)
+        for data in train_dc_py:
+            # data = data.to(device)
             optimizer.zero_grad()
 
-            sup_loss = F.mse_loss(model(data), data.y)
+            sup_loss = F.mse_loss(model(data), y)
             loss = sup_loss
 
             loss.backward()
-            loss_all += loss.item() * data.num_graphs
+            loss_all += loss.item() * batch_size # data.num_graphs
             optimizer.step()
 
-        return loss_all / len(train_loader.dataset)
+        return loss_all / len(train_dc_py.disk_dataset)
+    
+def dc_to_pyg(batch):
+    X,y,w,ids = batch
+    X = BatchGraphData(X)
+    X.edge_features = torch.from_numpy(X.edge_features).float()
+    X.edge_index = torch.from_numpy(X.edge_index).long()
+    X.node_features = torch.from_numpy(X.node_features).float()
+    X.graph_index = torch.from_numpy(X.graph_index).long()
+
+    y = y[:,target]
+    y = torch.from_numpy(y).float()
+    return X, y
 
 def test(loader):
     model.eval()
     error = 0
 
-    for X,y,w,ids in loader:
-        X = BatchGraphData(X)
-        X.edge_features = torch.from_numpy(X.edge_features).float()
-        X.edge_index = torch.from_numpy(X.edge_index).long()
-        X.node_features = torch.from_numpy(X.node_features).float()
-        X.graph_index = torch.from_numpy(X.graph_index).long()
-        # take out target from y
-        y = y[:,target]
-        y = torch.from_numpy(y).float()
+    for batch in loader:
+        # X = BatchGraphData(X)
+        # X.edge_features = torch.from_numpy(X.edge_features).float()
+        # X.edge_index = torch.from_numpy(X.edge_index).long()
+        # X.node_features = torch.from_numpy(X.node_features).float()
+        # X.graph_index = torch.from_numpy(X.graph_index).long()
+        # # take out target from y
+        # y = y[:,target]
+        # y = torch.from_numpy(y).float()
+        X, y = dc_to_pyg(batch)
         
         error += (model(X) * std - y * std).abs().sum().item()  # MAE
     return error / len(loader.disk_dataset)
