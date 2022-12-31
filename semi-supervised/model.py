@@ -31,18 +31,18 @@ class Encoder(torch.nn.Module):
         # self.lin2 = torch.nn.Linear(dim, 1)
 
     def forward(self, data):
-        out = F.relu(self.lin0(data.x))
+        out = F.relu(self.lin0(data.node_features))
         h = out.unsqueeze(0)
 
         feat_map = []
         for i in range(3):
-            m = F.relu(self.conv(out, data.edge_index, data.edge_attr))
+            m = F.relu(self.conv(out, data.edge_index, data.edge_features))
             out, h = self.gru(m.unsqueeze(0), h)
             out = out.squeeze(0)
             # print(out.shape) : [num_node x dim]
             feat_map.append(out)
 
-        out = self.set2set(out, data.batch)
+        out = self.set2set(out, data.graph_index)
         return out, feat_map[-1]
 
 
@@ -126,7 +126,7 @@ class Net(torch.nn.Module):
 
         measure = 'JSD'
         if self.local:
-            loss = local_global_loss_(l_enc, g_enc, data.edge_index, data.batch, measure)
+            loss = local_global_loss_(l_enc, g_enc, data.edge_index, data.graph_index, measure)
         return loss
 
 
@@ -138,7 +138,7 @@ class Net(torch.nn.Module):
         g_enc1 = self.ff2(y_)
 
         measure = 'JSD'
-        loss = global_global_loss_(g_enc, g_enc1, data.edge_index, data.batch, measure)
+        loss = global_global_loss_(g_enc, g_enc1, data.edge_index, data.graph_index, measure)
 
         return loss
 

@@ -102,9 +102,10 @@ def test(loader):
     error = 0
 
     for X,y,w,ids in loader:
-        data.x = torch.tensor(X)
-        
-        error += (model(data) * std - data.y * std).abs().sum().item()  # MAE
+        X = BatchGraphData(X)
+        # take out target from y
+        y = y[:,target]
+        error += (model(X) * std - y * std).abs().sum().item()  # MAE
     return error / len(loader.dataset)
 
 def seed_everything(seed=1234):
